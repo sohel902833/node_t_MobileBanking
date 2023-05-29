@@ -1,16 +1,23 @@
 import { model, Schema, Types } from "mongoose";
 import { TRANSECTION_MODEL, USER_MODEL_NAME } from "./modelConfig";
 
-export const CASHOUT_TRANSECTION_TYPE = "CASHOUT";
-export const CASHIN_TRANSECTION_TYPE = "CASHIN";
+export enum TransectionTypes {
+  CASHIN_TRANSECTION_TYPE = "cashin",
+  CASHOUT_TRANSECTION_TYPE = "cashout",
+  SEND_MONEY_TRANSECTION_TYPE = "sendmoney",
+  PAYMENT_TRANSECTION_TYPE = "payment",
+}
 
 export interface ITransection {
   _id?: Types.ObjectId;
   amount: number;
   trxId: string;
-  text: string;
+  description: string;
   transectionType: string;
-  user?: string;
+  senderUser?: string;
+  receiverUser?: string;
+  senderUserType: string;
+  receiverUserType: string;
 }
 
 const TransectionSchema = new Schema<ITransection>(
@@ -24,17 +31,30 @@ const TransectionSchema = new Schema<ITransection>(
       type: String,
       required: true,
     },
-    text: {
+    description: {
+      type: String,
+      required: true,
+    },
+    senderUserType: {
+      type: String,
+      required: true,
+    },
+    receiverUserType: {
       type: String,
       required: true,
     },
     transectionType: {
       type: String,
       required: true,
-      default: CASHIN_TRANSECTION_TYPE,
-      enum: [CASHIN_TRANSECTION_TYPE, CASHOUT_TRANSECTION_TYPE],
+      default: TransectionTypes.CASHIN_TRANSECTION_TYPE,
+      enum: Object.values(TransectionTypes),
     },
-    user: {
+    senderUser: {
+      type: Types.ObjectId,
+      required: true,
+      ref: USER_MODEL_NAME,
+    },
+    receiverUser: {
       type: Types.ObjectId,
       required: true,
       ref: USER_MODEL_NAME,

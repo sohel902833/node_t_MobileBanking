@@ -57,18 +57,25 @@ export const getMainAccountTransections = async (
   try {
     const transections = await MainAccount.find().populate({
       path: "transections.transection",
-      populate: {
-        path: "user",
-        model: USER_MODEL_NAME,
-        select: userPublicValue,
-      },
+      populate: [
+        {
+          path: "senderUser",
+          model: USER_MODEL_NAME,
+          select: userPublicValue,
+        },
+        {
+          path: "receiverUser",
+          model: USER_MODEL_NAME,
+          select: userPublicValue,
+        },
+      ],
     });
 
     if (transections && transections.length > 0) {
       const tr = transections[0];
       res.status(201).json({
         balance: tr.balance,
-        transections: tr,
+        transections: tr.transections.reverse(),
       });
     } else {
       res.status(200).json({
@@ -76,6 +83,7 @@ export const getMainAccountTransections = async (
       });
     }
   } catch (err) {
+    console.log(err);
     res.status(404).json({
       message: "Session timeout.",
       error: err,

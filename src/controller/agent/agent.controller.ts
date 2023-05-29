@@ -1,15 +1,15 @@
 import { NextFunction, Response } from "express";
-import { CUSTOMER_USER_TYPE } from "../../models/user.model";
+import { TransectionTypes } from "../../models/transection.model";
+import User, {
+  AGENT_USER_TYPE,
+  CUSTOMER_USER_TYPE,
+} from "../../models/user.model";
 import {
   createManyTransections,
   generateTransection,
 } from "../../services/transection/transection.service";
 import { getUser, updateUserBalance } from "../../services/user/user.service";
 import { IRequest } from "../../types/express";
-import {
-  BALANCE_ADDED_FROM_AGENT,
-  CASHIN_TO_USER_ACCOUNT,
-} from "../../types/transection/transectionTypes";
 
 export const cashInToUserAccount = async (
   req: IRequest,
@@ -66,23 +66,17 @@ export const cashInToUserAccount = async (
     const senderUpdateBalance = (sender?.balance as number) - amount;
     const receiverUpdateBalance = receiver.balance + amount;
     //generate transections
-    const senderTransection = generateTransection(
+    const senderTransection = generateTransection({
       amount,
-      false,
-      CASHIN_TO_USER_ACCOUNT,
-      sender?._id?.toString() as string
-    );
-    const receiverTransection = generateTransection(
-      amount,
-      true,
-      BALANCE_ADDED_FROM_AGENT,
-      receiver?._id?.toString()
-    );
+      transectionType: TransectionTypes.SEND_MONEY_TRANSECTION_TYPE,
+      description: "cash in to user account",
+      receiverUserId: receiver._id.toString(),
+      senderUserId: req.userId as string,
+      receiverUserType: receiver.userType,
+      senderUserType: sender?.userType as string,
+    });
     //save transections
-    const savedTransections = await createManyTransections([
-      senderTransection,
-      receiverTransection,
-    ]);
+    const savedTransections = await createManyTransections([senderTransection]);
     //update sender account
     const updatedSenderAccount = await updateUserBalance(
       sender?._id?.toString() as string,
@@ -96,6 +90,26 @@ export const cashInToUserAccount = async (
     //send money done
     res.status(201).json({
       message: "Send Money Successful.",
+      success: true,
+    });
+  } catch (err) {
+    res.status(404).json({
+      message: "Server Error Found.",
+    });
+  }
+};
+
+export const getAllAgentList = async (
+  req: IRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const agents = await User.find({ userType: AGENT_USER_TYPE }).sort({
+      createdAt: -1,
+    });
+    res.status(200).json({
+      agents,
     });
   } catch (err) {
     res.status(404).json({

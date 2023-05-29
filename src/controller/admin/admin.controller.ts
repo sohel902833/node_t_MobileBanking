@@ -1,19 +1,19 @@
 import { NextFunction, Response } from "express";
 import MainAccount, { IMainAccount } from "../../models/mainaccount.model";
-import User, { AGENT_USER_TYPE } from "../../models/user.model";
+import { TransectionTypes } from "../../models/transection.model";
+import User, {
+  ADMIN_USER_TYPE,
+  AGENT_USER_TYPE,
+} from "../../models/user.model";
 import { updateMainAccountBalance } from "../../services/admin/account.service";
 import { createTransection } from "../../services/transection/transection.service";
 import { updateUserBalance } from "../../services/user/user.service";
 import { IRequest } from "../../types/express";
 import {
-  ADD_BALANCE_BY_ADMIN_TO_MAIN_ACCOUNT,
-  RECEIVED_BALANCE_FROM_ADMIN,
-  SENT_BALANCE_TO_AGENT,
-} from "../../types/transection/transectionTypes";
-import {
   createManyTransections,
   generateTransection,
 } from "./../../services/transection/transection.service";
+import { DashboardDataType, IUserStatsItem } from "./admin.types";
 
 export const addBalanceInMainAccount = async (
   req: IRequest,
@@ -25,6 +25,7 @@ export const addBalanceInMainAccount = async (
     if (!amount) {
       return res.status(200).json({
         message: "Put Info",
+        success: false,
       });
     }
     amount = Number(amount);
@@ -32,19 +33,23 @@ export const addBalanceInMainAccount = async (
     if (amount <= 0) {
       return res.status(200).json({
         message: "Wrong Amount.",
+        success: false,
       });
     }
 
     const userId = req.userId;
     //generate new transection
-    const senderTransection = generateTransection(
+    const transection = generateTransection({
       amount,
-      true,
-      ADD_BALANCE_BY_ADMIN_TO_MAIN_ACCOUNT,
-      userId?.toString() as string
-    );
+      transectionType: TransectionTypes.CASHIN_TRANSECTION_TYPE,
+      description: TransectionTypes.CASHIN_TRANSECTION_TYPE,
+      receiverUserId: userId as string,
+      senderUserId: userId as string,
+      receiverUserType: ADMIN_USER_TYPE,
+      senderUserType: ADMIN_USER_TYPE,
+    });
     //save the transections
-    const savedTransection = await createTransection(senderTransection);
+    const savedTransection = await createTransection(transection);
     const dbMainAccount = await MainAccount.find();
 
     if (dbMainAccount && dbMainAccount.length > 0) {
@@ -60,6 +65,7 @@ export const addBalanceInMainAccount = async (
       //end response
       res.status(201).json({
         message: "Balance Added.",
+        success: true,
       });
     } else {
       //no data added till now,, need to create first
@@ -204,22 +210,16 @@ export const sendBalanceToAgent = async (
     //everything fine lets update account info
 
     //create transections
-    const senderTransection = generateTransection(
+    const senderTransection = generateTransection({
       amount,
-      false,
-      SENT_BALANCE_TO_AGENT,
-      req.userId as string
-    );
-    const receiverTransection = generateTransection(
-      amount,
-      true,
-      RECEIVED_BALANCE_FROM_ADMIN,
-      receiver._id.toString()
-    );
-    const savedTransections = await createManyTransections([
-      senderTransection,
-      receiverTransection,
-    ]);
+      transectionType: TransectionTypes.CASHIN_TRANSECTION_TYPE,
+      description: "sent balance to agent account",
+      receiverUserId: receiver._id.toString(),
+      senderUserId: req.userId as string,
+      receiverUserType: AGENT_USER_TYPE,
+      senderUserType: ADMIN_USER_TYPE,
+    });
+    const savedTransections = await createManyTransections([senderTransection]);
     //update main account balance
     const updatedBalance = accountBalance - amount;
     const updateMainAccount = await updateMainAccountBalance(
@@ -233,10 +233,55 @@ export const sendBalanceToAgent = async (
       receiver.balance + amount
     );
 
-    console.log(savedTransections);
     //send balance successful.
 
-    res.status(201).json({ message: "Balance Sent Successful." });
+    res
+      .status(201)
+      .json({ message: "Balance Sent Successful.", success: true });
+  } catch (err) {
+    res.status(404).json({
+      message: "Session timeout.",
+      error: err,
+    });
+  }
+};
+export const getDashboardInfo = async (
+  req: IRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userStats: IUserStatsItem[] = await User.aggregate([
+      {
+        $group: {
+          _id: "$userType",
+          count: { $sum: 1 },
+          balanceSum: { $sum: "$balance" },
+        },
+      },
+      {
+        $project: {
+          userType: "$_id",
+          count: 1,
+          balanceSum: 1,
+          _id: 0,
+        },
+      },
+    ]);
+    let dashboardInfo: DashboardDataType | any = {};
+    userStats.forEach((item) => {
+      if (item.userType === "admin") {
+        dashboardInfo.totalAdminCount = item.count;
+      } else if (item.userType === "agent") {
+        dashboardInfo.totalAgentCount = item.count;
+        dashboardInfo.totalAgentBalance = item.balanceSum;
+      } else if (item.userType === "user") {
+        dashboardInfo.totalUser = item.count;
+        dashboardInfo.totalUserBalance = item.balanceSum;
+      }
+    });
+
+    res.status(200).json(dashboardInfo);
   } catch (err) {
     res.status(404).json({
       message: "Session timeout.",

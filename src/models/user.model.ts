@@ -15,6 +15,7 @@ export interface IUser {
   birthdate: string;
   phone: string;
   password?: string;
+  idNo?: string;
   balance?: number;
   avatar: {
     fileName: string;
@@ -53,6 +54,11 @@ const userSchema = new Schema<IUser>(
       required: true,
       trim: true,
       lowercase: true,
+    },
+    idNo: {
+      type: String,
+      required: true,
+      trim: true,
     },
     birthdate: Date,
     phone: {

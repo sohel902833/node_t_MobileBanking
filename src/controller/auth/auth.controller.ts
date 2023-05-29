@@ -29,11 +29,28 @@ export const signupUser = async (
   next: NextFunction
 ) => {
   try {
-    const { firstName, lastName, email, password, birthdate, phone } = req.body;
+    const { firstName, lastName, email, password, birthdate, phone, idNo } =
+      req.body;
     //check email already exists or not
-    const prevUser = await User.findOne({ email: email });
+    const prevUser = await User.findOne({
+      $or: [{ email: email }, { phone: phone }, { idNo: idNo }],
+    });
     if (prevUser) {
-      return res.status(200).json({ message: "User Already Exists." });
+      let newErrors: any = {};
+      if (email === prevUser?.email) {
+        newErrors.email = "Email already exists.";
+      }
+      if (phone === prevUser?.phone) {
+        newErrors.phone = "Phone number already exists.";
+      }
+      if (idNo === prevUser?.idNo) {
+        newErrors.idNo = "Id already exists.";
+      }
+      return res.status(200).json({
+        message: "User Already Exists.",
+        errors: newErrors,
+        success: false,
+      });
     }
 
     const registeredBy = email ? EMAIL_REGISTERED_TYPE : PHONE_REGISTEREDE_TYPE;
@@ -67,6 +84,7 @@ export const signupUser = async (
         },
       ],
       userType: userRole,
+      idNo: idNo,
     };
 
     const newUser = new User(user);
@@ -90,10 +108,12 @@ export const signupUser = async (
     delete user.password;
     delete user.tokens;
     user.balance = 0;
+    user._id = createdUser._id;
     res.status(201).json({
       message: "User Register Successful.",
       user,
       token: token,
+      success: true,
     });
   } catch (err) {
     return res.status(404).json({
@@ -108,9 +128,11 @@ export const loginUser = async (
   next: NextFunction
 ) => {
   try {
-    const { email, password } = req.body as IUser;
+    const { email, password, phone } = req.body as IUser;
 
-    const dbUser = await User.findOne({ email: email });
+    const dbUser = await User.findOne({
+      $or: [{ email: email }, { phone: phone }],
+    });
     //check user exists or not
     if (!dbUser) {
       return res.status(200).json({
@@ -344,6 +366,7 @@ export const forgetPassword = async (
     if (!email) {
       return res.status(200).json({
         message: "Email Not Found.",
+        success: false,
       });
     }
 
@@ -354,6 +377,7 @@ export const forgetPassword = async (
     if (!user) {
       return res.status(200).json({
         message: "User Doesn't Exists.",
+        success: false,
       });
     }
 
@@ -386,6 +410,7 @@ export const forgetPassword = async (
 
       return res.status(201).json({
         message: "Verify Code Sent To Your Email.",
+        success: true,
       });
     } else {
       //need to create to the database
@@ -393,12 +418,14 @@ export const forgetPassword = async (
       const savedCode = await newVerifyCode.save();
       return res.status(201).json({
         message: "Verify Code Sent To Your Email.",
+        success: true,
       });
     }
   } catch (err) {
     res.status(404).json({
       message: "Server Error Found.",
       error: err,
+      success: false,
     });
   }
 };
@@ -423,6 +450,7 @@ export const resetPasswordByVerifyCode = async (
     if (!user) {
       return res.status(200).json({
         message: "User Not Found.",
+        success: false,
       });
     }
 
@@ -430,6 +458,7 @@ export const resetPasswordByVerifyCode = async (
     if (!verifyCode || verifyCode.code !== Number(code)) {
       return res.status(200).json({
         message: "Verify Code Doesn't Matched.",
+        success: false,
       });
     }
     //code matched
@@ -446,11 +475,13 @@ export const resetPasswordByVerifyCode = async (
 
     res.status(201).json({
       message: "Password Updated Successful.",
+      success: true,
     });
   } catch (err) {
     res.status(404).json({
       message: "Session timeout.",
       error: err,
+      success: false,
     });
   }
 };

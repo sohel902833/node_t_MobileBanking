@@ -30,6 +30,11 @@ router.get(
 
 router.get("/users", authGard([ADMIN_USER_TYPE]), userController.getAllUsers);
 router.get(
+  "/dashboard-info",
+  authGard([ADMIN_USER_TYPE]),
+  adminController.getDashboardInfo
+);
+router.get(
   "/users-transection/:userId",
   authGard([ADMIN_USER_TYPE]),
   transectionController.getUserTransections

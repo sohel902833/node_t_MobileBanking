@@ -8,4 +8,6 @@ export const userPublicValue = {
   cover: 1,
   verified: 1,
   balance: 1,
+  createdAt: 1,
+  idNo: 1,
 };

@@ -1,3 +1,4 @@
+import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import { connectDb } from "./db";
@@ -12,6 +13,7 @@ dotenv.config();
 connectDb();
 //to parse json data
 app.use(express.json());
+app.use(cors());
 
 app.use("/auth", authRouter);
 app.use("/user", userRouter);

@@ -1,4 +1,5 @@
 import { NextFunction, Response } from "express";
+import { TransectionTypes } from "../../models/transection.model";
 import User, {
   AGENT_USER_TYPE,
   CUSTOMER_USER_TYPE,
@@ -9,12 +10,6 @@ import {
 } from "../../services/transection/transection.service";
 import { getUser, updateUserBalance } from "../../services/user/user.service";
 import { IRequest } from "../../types/express";
-import {
-  CASHOUT,
-  PAYMENT,
-  RECEIVED_MONEY,
-  SEND_MONEY,
-} from "../../types/transection/transectionTypes";
 import { userPublicValue } from "./userConfig";
 
 export const getUserProfile = async (
@@ -92,23 +87,17 @@ export const sendMoney = async (
     const senderUpdateBalance = (sender?.balance as number) - amount;
     const receiverUpdateBalance = receiver.balance + amount;
     //generate transections
-    const senderTransection = generateTransection(
+    const newTransection = generateTransection({
       amount,
-      false,
-      SEND_MONEY,
-      sender?._id?.toString() as string
-    );
-    const receiverTransection = generateTransection(
-      amount,
-      true,
-      RECEIVED_MONEY,
-      receiver?._id?.toString()
-    );
+      transectionType: TransectionTypes.SEND_MONEY_TRANSECTION_TYPE,
+      description: "sent money",
+      receiverUserId: receiver._id.toString(),
+      senderUserId: req.userId as string,
+      receiverUserType: receiver.userType,
+      senderUserType: sender?.userType as string,
+    });
     //save transections
-    const savedTransections = await createManyTransections([
-      senderTransection,
-      receiverTransection,
-    ]);
+    const savedTransections = await createManyTransections([newTransection]);
     //update sender account
     const updatedSenderAccount = await updateUserBalance(
       sender?._id?.toString() as string,
@@ -179,23 +168,17 @@ export const payment = async (
     const senderUpdateBalance = (sender?.balance as number) - amount;
     const receiverUpdateBalance = receiver.balance + amount;
     //generate transections
-    const senderTransection = generateTransection(
+    const senderTransection = generateTransection({
       amount,
-      false,
-      PAYMENT,
-      sender?._id?.toString() as string
-    );
-    const receiverTransection = generateTransection(
-      amount,
-      true,
-      PAYMENT,
-      receiver?._id?.toString()
-    );
+      transectionType: TransectionTypes.PAYMENT_TRANSECTION_TYPE,
+      description: "payment",
+      receiverUserId: receiver._id.toString(),
+      senderUserId: req.userId as string,
+      receiverUserType: receiver?.userType as string,
+      senderUserType: sender?.userType as string,
+    });
     //save transections
-    const savedTransections = await createManyTransections([
-      senderTransection,
-      receiverTransection,
-    ]);
+    const savedTransections = await createManyTransections([senderTransection]);
     //update sender account
     const updatedSenderAccount = await updateUserBalance(
       sender?._id?.toString() as string,
@@ -209,6 +192,7 @@ export const payment = async (
     //send money done
     res.status(201).json({
       message: "Payment Successful.",
+      success: true,
     });
   } catch (err) {
     res.status(404).json({
@@ -273,23 +257,17 @@ export const cashOutToAgent = async (
     const senderUpdateBalance = (sender?.balance as number) - amount;
     const receiverUpdateBalance = receiver.balance + amount;
     //generate transections
-    const senderTransection = generateTransection(
+    const senderTransection = generateTransection({
       amount,
-      false,
-      CASHOUT,
-      sender?._id?.toString() as string
-    );
-    const receiverTransection = generateTransection(
-      amount,
-      true,
-      CASHOUT,
-      receiver?._id?.toString()
-    );
+      transectionType: TransectionTypes.CASHOUT_TRANSECTION_TYPE,
+      description: "cashout",
+      receiverUserId: receiver._id.toString(),
+      senderUserId: req.userId as string,
+      receiverUserType: receiver.userType,
+      senderUserType: sender?.userType as string,
+    });
     //save transections
-    const savedTransections = await createManyTransections([
-      senderTransection,
-      receiverTransection,
-    ]);
+    const savedTransections = await createManyTransections([senderTransection]);
     //update sender account
     const updatedSenderAccount = await updateUserBalance(
       sender?._id?.toString() as string,
@@ -317,7 +295,10 @@ export const getAllUsers = async (
   next: NextFunction
 ) => {
   try {
-    const users = await User.find({}, userPublicValue);
+    const users = await User.find(
+      { userType: CUSTOMER_USER_TYPE },
+      userPublicValue
+    );
     res.status(201).json(users);
   } catch (err) {
     res.status(404).json({
