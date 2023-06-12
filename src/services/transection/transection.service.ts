@@ -18,6 +18,8 @@ export const generateTransection = ({
   receiverUserId,
   senderUserType,
   receiverUserType,
+  senderIn,
+  receiverIn,
 }: {
   amount: number;
   transectionType: TransectionTypes;
@@ -26,6 +28,8 @@ export const generateTransection = ({
   receiverUserId: string;
   senderUserType: string;
   receiverUserType: string;
+  senderIn: boolean;
+  receiverIn: boolean;
 }): ITransection => {
   const newTr: ITransection = {
     amount: amount,
@@ -36,6 +40,8 @@ export const generateTransection = ({
     receiverUser: receiverUserId,
     senderUserType: senderUserType,
     receiverUserType: receiverUserType,
+    senderIn: senderIn,
+    receiverIn,
   };
   return newTr;
 };

@@ -4,8 +4,8 @@ import { TRANSECTION_MODEL, USER_MODEL_NAME } from "./modelConfig";
 export enum TransectionTypes {
   CASHIN_TRANSECTION_TYPE = "cashin",
   CASHOUT_TRANSECTION_TYPE = "cashout",
-  SEND_MONEY_TRANSECTION_TYPE = "sendmoney",
-  PAYMENT_TRANSECTION_TYPE = "payment",
+  TRANSFER_TRANSECTION_TYPE = "transfer",
+  CHARGE_TRANSECTION_TYPE = "fee",
 }
 
 export interface ITransection {
@@ -18,6 +18,8 @@ export interface ITransection {
   receiverUser?: string;
   senderUserType: string;
   receiverUserType: string;
+  senderIn: boolean;
+  receiverIn: boolean;
 }
 
 const TransectionSchema = new Schema<ITransection>(
@@ -43,6 +45,14 @@ const TransectionSchema = new Schema<ITransection>(
       type: String,
       required: true,
     },
+    senderIn: {
+      type: Boolean,
+      required: true,
+    },
+    receiverIn: {
+      type: Boolean,
+      required: true,
+    },
     transectionType: {
       type: String,
       required: true,
@@ -51,20 +61,19 @@ const TransectionSchema = new Schema<ITransection>(
     },
     senderUser: {
       type: Types.ObjectId,
-      required: true,
       ref: USER_MODEL_NAME,
+      required: true,
     },
     receiverUser: {
       type: Types.ObjectId,
-      required: true,
       ref: USER_MODEL_NAME,
+      required: true,
     },
   },
   {
     timestamps: true,
   }
 );
-
 const Transection = model<ITransection>(TRANSECTION_MODEL, TransectionSchema);
 
 export default Transection;

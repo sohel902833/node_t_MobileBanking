@@ -2,6 +2,7 @@ import { NextFunction, Response } from "express";
 import MainAccount from "../../models/mainaccount.model";
 import { USER_MODEL_NAME } from "../../models/modelConfig";
 import Transection from "../../models/transection.model";
+import User from "../../models/user.model";
 import { IRequest } from "../../types/express";
 import { userPublicValue } from "../user/userConfig";
 
@@ -34,12 +35,15 @@ export const getUserTransections = async (
 ) => {
   try {
     const userId = req.params.userId;
-    const transections = await Transection.find({ user: userId }).populate(
-      "user",
-      userPublicValue
-    );
+    const user = await User.findOne({ _id: userId });
+    const transections = await Transection.find({
+      $or: [{ senderUser: userId }, { receiverUser: userId }],
+    })
+      .populate("senderUser", userPublicValue)
+      .populate("receiverUser", userPublicValue);
     res.status(201).json({
-      transections,
+      transections: transections.reverse(),
+      user,
     });
   } catch (err) {
     res.status(404).json({

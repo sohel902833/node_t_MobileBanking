@@ -4,6 +4,8 @@ export interface DashboardDataType {
   totalAgentCount: number;
   totalAgentBalance: number;
   totalAdminCount: number;
+  mainAccountBalance: number;
+  totalAdminCashIn: number;
 }
 
 export interface IUserStatsItem {

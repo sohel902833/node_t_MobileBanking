@@ -68,12 +68,14 @@ export const cashInToUserAccount = async (
     //generate transections
     const senderTransection = generateTransection({
       amount,
-      transectionType: TransectionTypes.SEND_MONEY_TRANSECTION_TYPE,
+      transectionType: TransectionTypes.TRANSFER_TRANSECTION_TYPE,
       description: "cash in to user account",
       receiverUserId: receiver._id.toString(),
       senderUserId: req.userId as string,
       receiverUserType: receiver.userType,
       senderUserType: sender?.userType as string,
+      senderIn: false,
+      receiverIn: true,
     });
     //save transections
     const savedTransections = await createManyTransections([senderTransection]);

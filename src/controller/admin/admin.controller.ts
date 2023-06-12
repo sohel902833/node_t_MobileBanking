@@ -1,18 +1,19 @@
 import { NextFunction, Response } from "express";
+import { Types } from "mongoose";
 import MainAccount, { IMainAccount } from "../../models/mainaccount.model";
-import { TransectionTypes } from "../../models/transection.model";
-import User, {
-  ADMIN_USER_TYPE,
-  AGENT_USER_TYPE,
-} from "../../models/user.model";
+import Transection, { TransectionTypes } from "../../models/transection.model";
+import User from "../../models/user.model";
 import { updateMainAccountBalance } from "../../services/admin/account.service";
-import { createTransection } from "../../services/transection/transection.service";
-import { updateUserBalance } from "../../services/user/user.service";
-import { IRequest } from "../../types/express";
 import {
-  createManyTransections,
-  generateTransection,
-} from "./../../services/transection/transection.service";
+  getAllUsersSignupHistoryForDate,
+  getAllUsersSignupHistoryForDateRange,
+  getAllUsersSignupHistoryForMonth,
+  getAllUsersSignupHistoryForYear,
+} from "../../services/admin/admin.service";
+import { createTransection } from "../../services/transection/transection.service";
+import { IRequest } from "../../types/express";
+import { ADMIN_USER_TYPE } from "./../../models/user.model";
+import { generateTransection } from "./../../services/transection/transection.service";
 import { DashboardDataType, IUserStatsItem } from "./admin.types";
 
 export const addBalanceInMainAccount = async (
@@ -47,6 +48,8 @@ export const addBalanceInMainAccount = async (
       senderUserId: userId as string,
       receiverUserType: ADMIN_USER_TYPE,
       senderUserType: ADMIN_USER_TYPE,
+      senderIn: true,
+      receiverIn: true,
     });
     //save the transections
     const savedTransection = await createTransection(transection);
@@ -143,108 +146,6 @@ export const getAdminAccountInfo = async (
   }
 };
 
-export const sendBalanceToAgent = async (
-  req: IRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    let { agentId, amount, email } = req.body;
-
-    if (!agentId && !email) {
-      return res.status(200).json({
-        message: "Receiver Not Found.",
-      });
-    }
-    //check amount exists or not
-    if (!amount) {
-      return res.status(200).json({
-        message: "Put Value.",
-      });
-    }
-    amount = Number(amount);
-    const mainAccount = req.mainAccount;
-    const accountBalance = req.mainAccount?.balance as number;
-
-    //fetch receiver Info
-    const receiverData = await User.find({
-      $or: [{ email: email }, { _id: agentId }],
-    });
-
-    //check receiver exists or not
-    if (!(receiverData && receiverData.length > 0)) {
-      return res.status(200).json({
-        message: "Receiver Not Found.",
-      });
-    }
-
-    //check sender receiver different or same
-    const receiver = receiverData[0];
-
-    //check receiver is agent or not
-    if (receiver.userType !== AGENT_USER_TYPE) {
-      return res.status(200).json({
-        message: "Receiver Is not an agent",
-      });
-    }
-
-    if (receiver._id.toString() === req.userId) {
-      return res.status(200).json({
-        message: "Sender And Receiver Is Same.",
-      });
-    }
-
-    //check proper amount is here
-    if (amount <= 0) {
-      return res.status(200).json({
-        message: "Wrong Amount.",
-      });
-    }
-
-    //check sufficient balance is exists
-    if (!(accountBalance >= amount)) {
-      return res.status(200).json({
-        message: "Insufficient Balance",
-      });
-    }
-    //everything fine lets update account info
-
-    //create transections
-    const senderTransection = generateTransection({
-      amount,
-      transectionType: TransectionTypes.CASHIN_TRANSECTION_TYPE,
-      description: "sent balance to agent account",
-      receiverUserId: receiver._id.toString(),
-      senderUserId: req.userId as string,
-      receiverUserType: AGENT_USER_TYPE,
-      senderUserType: ADMIN_USER_TYPE,
-    });
-    const savedTransections = await createManyTransections([senderTransection]);
-    //update main account balance
-    const updatedBalance = accountBalance - amount;
-    const updateMainAccount = await updateMainAccountBalance(
-      mainAccount?._id?.toString() as string,
-      updatedBalance,
-      savedTransections[0]._id.toString()
-    );
-    //add balance to agent account
-    const updatedAgentBalance = await updateUserBalance(
-      receiver._id.toString(),
-      receiver.balance + amount
-    );
-
-    //send balance successful.
-
-    res
-      .status(201)
-      .json({ message: "Balance Sent Successful.", success: true });
-  } catch (err) {
-    res.status(404).json({
-      message: "Session timeout.",
-      error: err,
-    });
-  }
-};
 export const getDashboardInfo = async (
   req: IRequest,
   res: Response,
@@ -268,7 +169,30 @@ export const getDashboardInfo = async (
         },
       },
     ]);
+    const mainAccounts = await MainAccount.find({});
+    const adminCashInInfo = await Transection.aggregate([
+      {
+        $match: {
+          senderUserType: ADMIN_USER_TYPE,
+          receiverUserType: ADMIN_USER_TYPE,
+          transectionType: TransectionTypes.CASHIN_TRANSECTION_TYPE,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    const totalAdminCashIn = adminCashInInfo[0];
+
+    const mainAccount: any = mainAccounts[0];
     let dashboardInfo: DashboardDataType | any = {};
+
+    dashboardInfo.mainAccountBalance = mainAccount.balance || 0;
+    dashboardInfo.totalAdminCashIn = totalAdminCashIn?.totalAmount || 0;
     userStats.forEach((item) => {
       if (item.userType === "admin") {
         dashboardInfo.totalAdminCount = item.count;
@@ -281,7 +205,29 @@ export const getDashboardInfo = async (
       }
     });
 
-    res.status(200).json(dashboardInfo);
+    res.status(200).json({ ...dashboardInfo });
+  } catch (err) {
+    console.log(err);
+    res.status(404).json({
+      message: "Session timeout.",
+      error: err,
+    });
+  }
+};
+
+export const clearBalances = async (
+  req: IRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    await Transection.deleteMany({});
+    await User.updateMany({}, { balance: 0 });
+    await MainAccount.updateMany({}, { balance: 0, transections: [] });
+
+    res.status(201).json({
+      message: "Transections and accounts cleared.",
+    });
   } catch (err) {
     res.status(404).json({
       message: "Session timeout.",
@@ -290,6 +236,142 @@ export const getDashboardInfo = async (
   }
 };
 
+export const getUserTotalTransections = async (
+  req: IRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = new Types.ObjectId(req.params.userId);
+    const result = await Transection.aggregate([
+      {
+        $match: {
+          $or: [
+            {
+              senderUser: userId,
+            },
+            { receiverUser: userId },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalCashIn: {
+            $sum: {
+              $cond: [{ $eq: ["$receiverUser", userId] }, "$amount", 0],
+            },
+          },
+          totalCashOut: {
+            $sum: {
+              $cond: [{ $eq: ["$senderUser", userId] }, "$amount", 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    let response: {
+      totalCashIn: number;
+      totalCashOut: number;
+    } = {
+      totalCashIn: 0,
+      totalCashOut: 0,
+    };
+    if (result?.length > 0) {
+      const data = result[0];
+      if (data?.totalCashIn) {
+        response.totalCashIn = data?.totalCashIn;
+      }
+      if (data?.totalCashOut) {
+        response.totalCashOut = data?.totalCashOut;
+      }
+    }
+
+    res.status(200).json({
+      ...response,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(404).json({
+      message: "Session timeout.",
+      error: err,
+    });
+  }
+};
+
+export const getUserRegistrationChartInfo = async (
+  req: IRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    let userType = req.params.userType;
+    const by = req.query.by;
+    let result: any = {
+      filterBy: by,
+    };
+    if (by === "year") {
+      const year = req.query.year as string;
+      if (!year) {
+        return res.status(200).json({
+          message: "Please Choose Year",
+        });
+      }
+      result.data = await getAllUsersSignupHistoryForYear(
+        year.toString(),
+        userType
+      );
+    } else if (by === "month") {
+      const year = req.query.year as string;
+      const month = req.query.month as string;
+      if (!year || !month) {
+        return res.status(200).json({
+          message: "Please choose year and month",
+        });
+      }
+      result.data = await getAllUsersSignupHistoryForMonth(
+        year.toString(),
+        month,
+        userType
+      );
+    } else if (by === "day") {
+      const date = req.query.date as string;
+      if (!date) {
+        return res.status(200).json({
+          message: "Please choose date",
+        });
+      }
+      result.data = await getAllUsersSignupHistoryForDate(date, userType);
+    } else if (by === "range") {
+      const startDate = req.query.startDate as string;
+      const endDate = req.query.endDate as string;
+      if (!startDate || !endDate) {
+        return res.status(200).json({
+          message: "Please choose start and end date",
+        });
+      }
+      result.data = await getAllUsersSignupHistoryForDateRange(
+        startDate,
+        endDate,
+        userType
+      );
+    } else {
+      return res.status(200).json({
+        message: "Wrong Filter Provided",
+      });
+    }
+
+    res.json({
+      ...result,
+    });
+  } catch (err) {
+    res.status(404).json({
+      message: "Server error found.",
+      error: err,
+    });
+  }
+};
 export const markup = async (
   req: IRequest,
   res: Response,

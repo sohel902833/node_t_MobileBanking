@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { pushSettingsToReq } from "../controller/admin/settings.controller";
 import * as userController from "../controller/user/user.controller";
 import * as userTransectionController from "../controller/user/userTransection.controller";
 import { authGard } from "../middlewares/authGard";
@@ -19,7 +20,16 @@ router.post(
   authGard(),
   userTransectionController.validateUserToUserSendMoneyRequest
 );
-router.post("/send-money", authGard(), userController.sendMoney);
+router.post(
+  "/send-money/:token",
+  authGard(),
+  userTransectionController.sendMoney
+);
 router.post("/payment", authGard(), userController.payment);
-router.post("/cashout", authGard(), userController.cashOutToAgent);
+router.post(
+  "/cashout",
+  authGard(),
+  pushSettingsToReq,
+  userTransectionController.cashOutToAgent
+);
 router.get("/", authGard(), userController.getUserProfile);
